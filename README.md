@@ -1,2 +1,2 @@
 # deutschi
-German langauge parser in Prolog
+German language parser in Prolog
