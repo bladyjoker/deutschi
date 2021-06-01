@@ -83,6 +83,7 @@ article(indefinite).
 article(possesive(Whos)) :-
   ownership(Whos).
 article(negative).
+article(free).
 
 %! ownership(-Ownership:string) is nondet
 %  Grammatical ownership in the language.
@@ -134,29 +135,52 @@ season("Sommer").
 season("Herbst").
 season("Winter").
 
-% ## Variable naming
+% ## Terminology and variable naming
 %
-% A few notes on the terminology and how variables are named are shortened to
+% A few notes on the terminology and how variables are named and shortened to
 % have concise code statements.
 %
 % - Case - C
-% - Persona - P
+% - Number - N
+% - Gender - G
+% - NumberGender - NG
 % - Article - Ar
 % - Adjective - Adj
+% - Noun - No
 % - Adverb - Adv
-
+% - Match - M
+%
+% @see https://en.wikipedia.org/wiki/Grammatical_category
 % ## Sentences
+
+sentence(Es) --> noun_phrase(Es).
 
 ws --> [C], {char_type(C, white)}, ([];ws).
 statement_end --> ".";"!".
 
-sentence([entity(case(C), persona(P), article(ArType), adjectives([AdjTerm]), noun([Root, Suffix]))]) --> article(C, P, ArType), ws, adjective(AdjTerm, C, P, ctx(ArType)), ws, noun(Root, P, Suffix).
+% ### Noun phrases
+noun_phrase([entity(case(C), numgen(NG), article("", free), [], pronoun(PNoM))]) -->
+  pronoun(PNoM, C, NG).
+
+noun_phrase([entity(case(C), numgen(NG), article(ArM, Ar), [], noun(NoM, Parts))]) -->
+    article(ArM, C, NG, Ar), ws,
+    noun(NoM, NG, Parts).
+
+noun_phrase([entity(case(C), numgen(NG), article("", free), [adjective(AdjM)], noun(NoM, Parts))]) -->
+    adjective(AdjM, C, NG, ctx(free)), ws,
+    noun(NoM, NG, Parts).
+
+noun_phrase([entity(case(C), numgen(NG), article(ArM, Ar), [adjective(AdjM)], noun(NoM, Parts))]) -->
+    article(ArM, C, NG, Ar), ws,
+    adjective(AdjM, C, NG, ctx(Ar)), ws,
+    noun(NoM, NG, Parts).
 
 % ## Nouns
 
 noun_ng("Kind", single(neutral)).
 noun_ng("Schwester", single(feminine)).
 noun_ng("Schlag", single(masculine)).
+noun_ng("Mann", single(masculine)).
 
 
 % ### Masculine
@@ -221,6 +245,7 @@ noun(Matched, NG, [Matched]) -->
 % ## Nominative objects
 
 % ### Pronouns
+% @tbd Think about promoting Sie into its own 'formal' gnumber.
 pronoun("ich", nom, single(G)) --> "ich", {gender(G)}.
 pronoun("du", nom, single(G)) --> "du", {gender(G)}.
 pronoun("Sie", nom, single(G)) --> "Sie", {gender(G)}.
