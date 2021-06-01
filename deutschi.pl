@@ -1,3 +1,4 @@
+
 /** <module> Deutschi is a Prolog based interpreter for the German language.
 
 This module contains parsing rules for the German language in terms of simple
@@ -11,7 +12,7 @@ the abstract syntax tree of a given phrase in German.
 :- module(deutschi, [deutschi/2]).
 :- use_module(library(dcg/basics)).
 :- set_prolog_flag(double_quotes, chars).
-
+:- encoding(utf8).
 %! example(-GermanPhrase:string, -TranslatedPhrase) is nondet
 %  Some useful and otherwise interesting german phrases and their
 %  meaning/translation in some other language (mostly english).
@@ -73,6 +74,12 @@ gnumber(plural).
 %  Joined Grammatical numbers and genders in the language.
 numgen(single(G)) :-
     gender(G).
+% Think about making plural(Gender):
+% Ich sehe Raketen, von denen jede beängstigend ist.
+% Ich spiele Instrumente, von denen jedes laut ist.
+% Ich habe viele Parks besucht, von denen jeder grün war.
+% Here the plural carries the information about the gender
+% that is used in the second part of the sentence.
 numgen(plural).
 
 %! article(-ArticleType:atom) is nondet
@@ -152,13 +159,12 @@ season("Winter").
 %
 % @see https://en.wikipedia.org/wiki/Grammatical_category
 % ## Sentences
-
 sentence(Es) --> noun_phrase(Es).
 
 ws --> [C], {char_type(C, white)}, ([];ws).
 statement_end --> ".";"!".
 
-% ### Noun phrases
+% ## Noun phrases
 noun_phrase([entity(case(C), numgen(NG), article("", free), [], pronoun(PNoM))]) -->
   pronoun(PNoM, C, NG).
 
@@ -176,7 +182,7 @@ noun_phrase([entity(case(C), numgen(NG), article(ArM, Ar), [adjective(AdjM)], no
     noun(NoM, NG, Parts).
 
 % ## Nouns
-
+% @tbd Implement plural-single mappings.
 noun_ng("Kind", single(neutral)).
 noun_ng("Schwester", single(feminine)).
 noun_ng("Schlag", single(masculine)).
@@ -237,14 +243,7 @@ noun(Matched, NG, [Matched]) -->
     {capitalized(Matched), noun_ng(Matched, NG)},
     string(Matched).
 
-:- discontiguous pronoun/5.
-:- discontiguous adjective/6.
-:- discontiguous article/6.
-:- discontiguous case_inflection/4.
-
-% ## Nominative objects
-
-% ### Pronouns
+% ## Pronouns
 % @tbd Think about promoting Sie into its own 'formal' gnumber.
 pronoun("ich", nom, single(G)) --> "ich", {gender(G)}.
 pronoun("du", nom, single(G)) --> "du", {gender(G)}.
@@ -255,25 +254,79 @@ pronoun("es", nom, single(neutral)) --> "es".
 pronoun("wir", nom, plural) --> "wir".
 pronoun("ihr", nom, plural) --> "ihr".
 pronoun("sie", nom, plural) --> "sie".
+% ### Dativ
+pronoun("mir", dat, single(G)) --> "mir", {gender(G)}.
+pronoun("dir", dat, single(G)) --> "dir", {gender(G)}.
+pronoun("Ihnen", dat, single(G)) --> "Ihnen", {gender(G)}.
+pronoun("ihm", dat, single(masculine)) --> "ihm".
+pronoun("ihr", dat, single(feminine)) --> "ihr".
+pronoun("ihm", dat, single(neutral)) --> "ihm".
+pronoun("uns", dat, plural) --> "uns".
+pronoun("euch", dat, plural) --> "euch".
+pronoun("ihnen", dat, plural) --> "ihnen".
+% ### Accusative
+pronoun("mich", acc, single(G)) --> "mich", {gender(G)}.
+pronoun("dich", acc, single(G)) --> "dich", {gender(G)}.
+pronoun("Sie", acc, single(G)) --> "Sie", {gender(G)}.
+pronoun("ihn", acc, single(masculine)) --> "ihn".
+pronoun("sie", acc, single(feminine)) --> "sie".
+pronoun("es", acc, single(neutral)) --> "es".
+pronoun("uns", acc, plural) --> "uns".
+pronoun("euch", acc, plural) --> "euch".
+pronoun("sie", acc, plural) --> "sie".
 
-% ### Case inflections
+% ## Case inflections
 % @see https://en.wikipedia.org/wiki/Inflection
+% @tbd Remove from case inflection.
+% ### Nominative
 case_inflection(nom, single(masculine), Root, Root).
 case_inflection(nom, single(neutral), Root, Root).
 case_inflection(nom, NG, Root, IRoot) :-
     (NG = single(feminine); NG = plural),
     append(Root, "e", IRoot).
+% ### Dativ
+case_inflection(dat, single(G), Root, IRoot) :-
+    (G = masculine; G = neutral),
+    append(Root, "em", IRoot).
+case_inflection(dat, single(feminine), Root, IRoot) :-
+    append(Root, "er", IRoot).
+case_inflection(dat, plural, Root, IRoot) :-
+    append(Root, "en", IRoot).
+% ### Accusative
+case_inflection(acc, single(masculine), Root, IRoot) :-
+    append(Root, "en", IRoot).
+case_inflection(acc, single(neutral), Root, Root).
+case_inflection(acc, single(feminine), Root, Root).
 
-% ### Articles
-% #### Definite
+% ## Articles
+% ### Definite
+% #### Nominativ
 article("der", nom, single(masculine), definite) --> "der".
 article("die", nom, single(feminine), definite) --> "die".
 article("das", nom, single(neutral), definite) --> "das".
 article("die", nom, plural, definite) --> "die".
-% #### Indefinite
+% #### Dativ
+article("dem", dat, single(masculine), definite) --> "dem".
+article("der", dat, single(feminine), definite) --> "der".
+article("dem", dat, single(neutral), definite) --> "dem".
+article(Matched, dat, plural, definite) --> {member(Matched, ["den", "denn"])}, Matched.
+% #### Accusative
+article("den", acc, single(masculine), definite) --> "den".
+article("die", acc, single(feminine), definite) --> "die".
+article("das", acc, single(neutral), definite) --> "das".
+article("die", acc, plural, definite) --> "die".
+% ### Indefinite
+% #### Nominativ
 article(Matched, nom, single(G), indefinite) -->
     {case_inflection(nom, single(G), "ein", Matched)}, Matched.
-% #### Possesive
+% #### Dativ
+article(Matched, dat, single(G), indefinite) -->
+    {case_inflection(dat, single(G), "ein", Matched)}, Matched.
+% #### Accusativ
+article(Matched, acc, single(G), indefinite) -->
+    {case_inflection(acc, single(G), "ein", Matched)}, Matched.
+% ### Possesive
+% #### Nominativ
 article(Owner, nom, single(masculine), possesive(Owner)) -->
     {ownership(Owner), Owner \= "eure"}, string(Owner).
 article(Matched, nom, single(feminine), possesive(Owner)) -->
@@ -283,11 +336,20 @@ article(Matched, nom, single(neutral), possesive(Owner)) -->
     article(Matched, nom, single(masculine), possesive(Owner)).
 article(Matched, nom, plural, possesive(Owner)) -->
     article(Matched, nom, single(feminine), possesive(Owner)).
-% #### Negative
+% #### Dativ
+article(Matched, dat, CaG, possesive(Owner)) -->
+    {(ownership(Owner), Owner \= "euer", Owner \= "eure"); Owner = "eur"},
+    {case_inflection(dat, CaG, Owner, Matched)}, Matched.
+% ### Negative
+% #### Nominativ
 article(Matched, nom, NG, negative) -->
     {case_inflection(nom, NG, "kein", Matched)}, Matched.
+% #### Dativ
+article(Matched, dat, CaG, negative) -->
+    {case_inflection(dat, CaG, "kein", Matched)}, Matched.
 
-% ### Adjectives
+% ## Adjectives
+% ### Nominativ
 adjective(Matched, nom, single(G), ctx(definite)) -->
     string(Root), "e", {gender(G), append(Root, "e", Matched)}.
 adjective(Matched, nom, plural, ctx(definite)) -->
@@ -302,47 +364,7 @@ adjective(Matched, nom, plural, ctx(indefinite)) -->
     string(Root), "en", {append(Root, "en", Matched)}.
 adjective(Matched, nom, plural, ctx(free)) -->
     string(Root), "e", {append(Root, "e", Matched)}.
-
-% ## Dativ objects
-% ### Pronouns
-pronoun("mir", dat, single(G)) --> "mir", {gender(G)}.
-pronoun("dir", dat, single(G)) --> "dir", {gender(G)}.
-pronoun("Ihnen", dat, single(G)) --> "Ihnen", {gender(G)}.
-pronoun("ihm", dat, single(masculine)) --> "ihm".
-pronoun("ihr", dat, single(feminine)) --> "ihr".
-pronoun("ihm", dat, single(neutral)) --> "ihm".
-pronoun("uns", dat, plural) --> "uns".
-pronoun("euch", dat, plural) --> "euch".
-pronoun("ihnen", dat, plural) --> "ihnen".
-
-% ### Case inflections
-% @see https://en.wikipedia.org/wiki/Inflection
-case_inflection(dat, single(G), Root, IRoot) :-
-    (G = masculine; G = neutral),
-    append(Root, "em", IRoot).
-case_inflection(dat, single(feminine), Root, IRoot) :-
-    append(Root, "er", IRoot).
-case_inflection(dat, plural, Root, IRoot) :-
-    append(Root, "en", IRoot).
-
-% ### Articles
-% #### Definite
-article("dem", dat, single(masculine), definite) --> "dem".
-article("der", dat, single(feminine), definite) --> "der".
-article("dem", dat, single(neutral), definite) --> "dem".
-% #### Indefinite
-article(Matched, dat, single(G), indefinite) -->
-    {case_inflection(dat, single(G), "ein", Matched)}, Matched.
-article(Matched, plural, definite) --> {member(Matched, ["den", "denn"])}, Matched.
-% #### Possesive
-article(Matched, dat, CaG, possesive(Owner)) -->
-    {(ownership(Owner), Owner \= "euer", Owner \= "eure"); Owner = "eur"},
-    {case_inflection(dat, CaG, Owner, Matched)}, Matched.
-% #### Negative
-article(Matched, dat, CaG, negative) -->
-    {case_inflection(dat, CaG, "kein", Matched)}, Matched.
-
-% ### Adjectives
+% ### Dativ
 adjective(Matched, dat, NG, ctx(Ctx)) -->
     string(Root), "en",
     {numgen(NG), append(Root, "en", Matched), member(Ctx, [definite, indefinite])}.
@@ -387,6 +409,3 @@ test(noun_gender, [nondet]) :-
     test_noun_gender("Regen", masculine, ["Reg", "en"]).
 
 :- end_tests(deutschi).
-
-:- doc_server(4000).    % Start PlDoc at port 4000
-:- portray_text(true).  % Enable portray of strings
